@@ -1,6 +1,5 @@
-import { db, initDatabase } from './index.js';
+import { db } from './index.js';
 import { v4 as uuidv4 } from 'uuid';
-import fs from 'fs';
 
 // RIIZE 6位成员完整数据（按需求文档固定顺序）
 const RIIZE_MEMBERS = [
@@ -253,7 +252,7 @@ export const PROACTIVE_MESSAGE_TEMPLATES: Record<string, Record<string, string[]
       '嘿嘿，你来了！今天要不要一起做点什么？',
     ],
     intimacy_upgrade: [
-      '我们好像变得更亲近了！太开心了～',
+      '我们好像变得更亲近了！太开心～',
       '嘿嘿，感觉和你越来越熟了！好喜欢这种感觉！',
     ],
     long_absence: [
@@ -278,54 +277,44 @@ export const PROACTIVE_MESSAGE_TEMPLATES: Record<string, Record<string, string[]
   },
 };
 
-async function init() {
-  console.log('Initializing database...');
+/** Seed the database with initial data (members + settings). Called by index.ts after DB init. */
+export function seedDatabase(): void {
+  console.log('Seeding database with RIIZE members and settings...');
 
-  initDatabase();
-
-  // Insert members with complete data
-  const insertMember = db.prepare(`
-    INSERT OR IGNORE INTO members
-      (id, member_key, name, display_name, korean_name, avatar_url, background_url, base_prompt, custom_prompt, personality_settings, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
+  // Insert members
   for (const member of RIIZE_MEMBERS) {
-    insertMember.run(
+    db.prepare(`
+      INSERT OR IGNORE INTO members
+        (id, member_key, name, display_name, korean_name, avatar_url, background_url, base_prompt, custom_prompt, personality_settings, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
       member.id,
       member.member_key,
       member.name,
       member.display_name,
       member.korean_name,
-      '', // avatar_url - user uploads later
-      '', // background_url - user uploads later
+      '',
+      '',
       member.base_prompt,
-      '', // custom_prompt - user edits later
-      '{}', // personality_settings - user tunes later
+      '',
+      '{}',
       member.sort_order
     );
   }
 
   // Initialize settings row
-  const insertSettings = db.prepare(`
-    INSERT OR IGNORE INTO settings (id, api_key, base_url, model_name, admin_password_hash)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-
-  // Use env values as defaults
   const apiKey = process.env.OPENAI_API_KEY || '';
   const baseUrl = process.env.OPENAI_BASE_URL || 'https://api.siliconflow.cn/v1';
   const modelName = process.env.OPENAI_MODEL || 'Qwen/Qwen2.5-7B-Instruct';
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
 
-  // Store admin password as plain text for first version (simple verification)
-  // In production, should hash with bcrypt
-  insertSettings.run('settings_1', apiKey, baseUrl, modelName, adminPassword);
+  db.prepare(`
+    INSERT OR IGNORE INTO settings (id, api_key, base_url, model_name, admin_password_hash)
+    VALUES (?, ?, ?, ?, ?)
+  `).run('settings_1', apiKey, baseUrl, modelName, adminPassword);
 
-  console.log(`Database initialized successfully!`);
-  console.log(`Inserted ${RIIZE_MEMBERS.length} RIIZE members`);
+  console.log(`Seeded ${RIIZE_MEMBERS.length} RIIZE members`);
   console.log(`Settings initialized with default API config`);
-  console.log(`Admin password: ${adminPassword}`);
 }
 
-init().catch(console.error);
+export default seedDatabase;

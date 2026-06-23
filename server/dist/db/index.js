@@ -1,6 +1,7 @@
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 import path from 'path';
 import fs from 'fs';
+let _dbInstance = null;
 const dbPath = process.env.DATABASE_PATH || './data/riize-chat.db';
 const dbDir = path.dirname(dbPath);
 if (!fs.existsSync(dbDir)) {
@@ -11,12 +12,24 @@ const uploadDir = process.env.UPLOAD_DIR || './data/uploads';
 if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
 }
-export const db = new Database(dbPath);
-export function initDatabase() {
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    db.exec(`
-    -- 用户表：昵称 + 设备ID登录（无密码）
+/**
+ * Initialize the database (async - must be called before any DB operation)
+ */
+export async function initDatabaseAsync() {
+    const SQL = await initSqlJs();
+    // Load existing database or create new one
+    if (fs.existsSync(dbPath)) {
+        const fileBuffer = fs.readFileSync(dbPath);
+        _dbInstance = new SQL.Database(fileBuffer);
+    }
+    else {
+        _dbInstance = new SQL.Database();
+    }
+    // Enable WAL mode
+    _dbInstance.run('PRAGMA journal_mode = WAL');
+    _dbInstance.run('PRAGMA foreign_keys = ON');
+    // Run schema creation
+    _dbInstance.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       nickname TEXT NOT NULL,
@@ -27,7 +40,6 @@ export function initDatabase() {
       UNIQUE(device_id)
     );
 
-    -- 成员配置表：完整字段
     CREATE TABLE IF NOT EXISTS members (
       id TEXT PRIMARY KEY,
       member_key TEXT UNIQUE NOT NULL,
@@ -44,7 +56,6 @@ export function initDatabase() {
       updated_at TEXT DEFAULT (datetime('now', 'localtime'))
     );
 
-    -- 用户成员备注表：每个用户可以为成员设置备注名
     CREATE TABLE IF NOT EXISTS user_member_notes (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -57,7 +68,6 @@ export function initDatabase() {
       UNIQUE(user_id, member_id)
     );
 
-    -- 聊天记录表：支持 message_type 和 mode
     CREATE TABLE IF NOT EXISTS conversations (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -71,7 +81,6 @@ export function initDatabase() {
       FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
     );
 
-    -- 亲密度表：7档系统
     CREATE TABLE IF NOT EXISTS intimacy (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -88,7 +97,6 @@ export function initDatabase() {
       UNIQUE(user_id, member_id)
     );
 
-    -- 主动消息表：记录成员主动发给用户的消息
     CREATE TABLE IF NOT EXISTS proactive_messages (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -101,7 +109,6 @@ export function initDatabase() {
       FOREIGN KEY (member_id) REFERENCES members(id) ON DELETE CASCADE
     );
 
-    -- 设置表：系统级配置（API Key 等安全信息）
     CREATE TABLE IF NOT EXISTS settings (
       id TEXT PRIMARY KEY,
       api_key TEXT DEFAULT '',
@@ -112,10 +119,83 @@ export function initDatabase() {
       updated_at TEXT DEFAULT (datetime('now', 'localtime'))
     );
 
-    -- 创建索引提升查询性能
     CREATE INDEX IF NOT EXISTS idx_conversations_user_member ON conversations(user_id, member_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_intimacy_user ON intimacy(user_id);
     CREATE INDEX IF NOT EXISTS idx_proactive_user_member ON proactive_messages(user_id, member_id, is_read);
     CREATE INDEX IF NOT EXISTS idx_users_device ON users(device_id);
   `);
+    console.log('Database initialized with sql.js');
+}
+/** Save database to disk (call after writes if you want persistence) */
+export function saveDatabase() {
+    if (_dbInstance) {
+        const data = _dbInstance.export();
+        const buffer = Buffer.from(data);
+        fs.writeFileSync(dbPath, buffer);
+    }
+}
+/** Get the raw sql.js instance */
+export function getDb() {
+    return _dbInstance;
+}
+/**
+ * Compatible statement object mimicking better-sqlite3's prepare().get()/all()/run()
+ * This allows all route files to remain unchanged.
+ */
+class Statement {
+    sql;
+    constructor(sql) {
+        this.sql = sql;
+    }
+    get(...params) {
+        const db = _dbInstance;
+        if (!db)
+            throw new Error('Database not initialized');
+        const result = db.exec(this.sql, params);
+        if (!result || result.length === 0 || result[0].values.length === 0)
+            return undefined;
+        const cols = result[0].columns;
+        const row = result[0].values[0];
+        const obj = {};
+        for (let i = 0; i < cols.length; i++) {
+            obj[cols[i]] = row[i];
+        }
+        return obj;
+    }
+    all(...params) {
+        const db = _dbInstance;
+        if (!db)
+            throw new Error('Database not initialized');
+        const result = db.exec(this.sql, params);
+        if (!result || result.length === 0)
+            return [];
+        const cols = result[0].columns;
+        return result[0].values.map((row) => {
+            const obj = {};
+            for (let i = 0; i < cols.length; i++) {
+                obj[cols[i]] = row[i];
+            }
+            return obj;
+        });
+    }
+    run(...params) {
+        const db = _dbInstance;
+        if (!db)
+            throw new Error('Database not initialized');
+        db.run(this.sql, params);
+        saveDatabase();
+        return { changes: 1, lastInsertRowid: 0 };
+    }
+}
+/**
+ * Database-compatible object mimicking better-sqlite3 interface.
+ * Usage: db.prepare(sql).get(params), .all(params), .run(params)
+ */
+export const db = {
+    prepare: (sql) => new Statement(sql),
+};
+/** Sync init wrapper (for backwards compat with init.ts calling it synchronously) */
+export function initDatabase() {
+    // This is now async - caller must await initDatabaseAsync()
+    console.log('[db] initDatabase() called - use initDatabaseAsync() for sql.js');
 }
