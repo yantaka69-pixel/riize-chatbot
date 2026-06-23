@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Build output (keep dist for deployment)
+# client/dist/  -- we need this for Render deployment
+
+# Environment files (contains API keys!)
+.env
+.env.local
+.env.production
+server/.env
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+server/data/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
+
+# WorkBuddy internal
+.workbuddy/
+
+# Uploads (user data)
+uploads/
+server/uploads/
