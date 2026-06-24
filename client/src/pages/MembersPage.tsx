@@ -35,6 +35,27 @@ export default function MembersPage() {
     navigate(`/mode/${memberId}`);
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>, memberId: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Prevent navigation while uploading
+    e.stopPropagation();
+    e.preventDefault();
+
+    try {
+      const response = await membersApi.uploadAvatar(memberId, file);
+      if (response.avatarUrl) {
+        setMembers(prev => prev.map(m =>
+          m.id === memberId ? { ...m, avatarUrl: response.avatarUrl } : m
+        ));
+      }
+    } catch (error) {
+      console.error('Avatar upload failed:', error);
+    }
+    e.target.value = '';
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
@@ -79,17 +100,34 @@ export default function MembersPage() {
                 border border-gray-100 hover:border-blue-200 hover:bg-blue-50
                 card-hover transition-all text-left"
             >
-              {/* Avatar */}
-              <div
-                className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0"
-                style={{ backgroundColor: DEFAULT_AVATAR_COLORS[member.memberKey] || '#CBD5E1' }}
+              {/* Avatar (clickable for upload) */}
+              <label
+                className="relative cursor-pointer group shrink-0"
+                onClick={(e) => e.stopPropagation()}
               >
-                {member.avatarUrl ? (
-                  <img src={member.avatarUrl} alt={member.name} className="w-12 h-12 rounded-full object-cover" />
-                ) : (
-                  member.name.charAt(0)
-                )}
-              </div>
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-medium"
+                  style={{ backgroundColor: DEFAULT_AVATAR_COLORS[member.memberKey] || '#CBD5E1' }}
+                >
+                  {member.avatarUrl ? (
+                    <img src={member.avatarUrl} alt={member.name} className="w-12 h-12 rounded-full object-cover" />
+                  ) : (
+                    member.name.charAt(0)
+                  )}
+                </div>
+                <div className="absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                  <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={(e) => handleAvatarUpload(e, member.id)}
+                  className="hidden"
+                />
+              </label>
 
               {/* Info */}
               <div className="flex-1 min-w-0">

@@ -129,6 +129,12 @@ export const chatApi = {
     apiFetch<{ message: string }>(`/chat/history/${userId}`, {
       method: 'DELETE',
     }),
+
+  translate: (text: string, memberId: string) =>
+    apiFetch<{ translation: string }>('/chat/translate', {
+      method: 'POST',
+      body: { text, memberId },
+    }),
 };
 
 // === Intimacy API ===

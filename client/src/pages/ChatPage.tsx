@@ -25,6 +25,9 @@ export default function ChatPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showFallbackNotice, setShowFallbackNotice] = useState(false);
 
+  // Translation state: Map<messageId, { translation: string, loading: boolean }>
+  const [translations, setTranslations] = useState<Record<string, { translation: string; loading: boolean; show: boolean }>>({});
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -179,6 +182,57 @@ export default function ChatPage() {
     }
   };
 
+  // Translate a member message to Chinese
+  const handleTranslate = async (msgId: string, content: string) => {
+    const existing = translations[msgId];
+    if (existing?.translation) {
+      // Toggle show/hide
+      setTranslations(prev => ({
+        ...prev,
+        [msgId]: { ...prev[msgId], show: !prev[msgId].show },
+      }));
+      return;
+    }
+
+    // Start loading
+    setTranslations(prev => ({
+      ...prev,
+      [msgId]: { translation: '', loading: true, show: true },
+    }));
+
+    try {
+      const response = await chatApi.translate(content, memberId!);
+      setTranslations(prev => ({
+        ...prev,
+        [msgId]: { translation: response.translation, loading: false, show: true },
+      }));
+    } catch (error) {
+      console.error('Translate failed:', error);
+      setTranslations(prev => ({
+        ...prev,
+        [msgId]: { translation: '翻译失败，请重试', loading: false, show: true },
+      }));
+    }
+  };
+
+  // Upload avatar for current member
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !memberId) return;
+
+    try {
+      const response = await membersApi.uploadAvatar(memberId, file);
+      if (response.avatarUrl) {
+        // Update member state with new avatar
+        setMember(prev => prev ? { ...prev, avatarUrl: response.avatarUrl } : prev);
+      }
+    } catch (error) {
+      console.error('Avatar upload failed:', error);
+    }
+    // Reset input value so same file can be re-selected
+    e.target.value = '';
+  };
+
   if (isLoading || !member) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
@@ -205,17 +259,31 @@ export default function ChatPage() {
             </svg>
           </button>
 
-          {/* Avatar */}
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0"
-            style={{ backgroundColor: avatarColor }}
-          >
-            {member.avatarUrl ? (
-              <img src={member.avatarUrl} alt={member.name} className="w-10 h-10 rounded-full object-cover" />
-            ) : (
-              member.name.charAt(0)
-            )}
-          </div>
+          {/* Avatar (clickable to upload) */}
+          <label className="relative cursor-pointer group">
+            <div
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium shrink-0"
+              style={{ backgroundColor: avatarColor }}
+            >
+              {member.avatarUrl ? (
+                <img src={member.avatarUrl} alt={member.name} className="w-10 h-10 rounded-full object-cover" />
+              ) : (
+                member.name.charAt(0)
+              )}
+            </div>
+            <div className="absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+              <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              onChange={handleAvatarUpload}
+              className="hidden"
+            />
+          </label>
 
           {/* Info */}
           <div className="flex-1 min-w-0">
@@ -318,7 +386,8 @@ export default function ChatPage() {
             );
           }
 
-          // Member message
+          // Member message with translate button
+          const msgTranslation = translations[msg.id];
           return (
             <div key={msg.id} className="bubble-member flex items-start gap-2">
               <div
@@ -331,8 +400,29 @@ export default function ChatPage() {
                   member.name.charAt(0)
                 )}
               </div>
-              <div className="max-w-[75%] px-4 py-2 rounded-2xl bg-white border border-gray-100 text-sm text-gray-800 leading-relaxed shadow-sm">
-                {msg.content}
+              <div className="max-w-[75%]">
+                <div className="px-4 py-2 rounded-2xl bg-white border border-gray-100 text-sm text-gray-800 leading-relaxed shadow-sm">
+                  {msg.content}
+                </div>
+                {/* Translate button */}
+                {msg.role === 'member' && (
+                  <button
+                    onClick={() => handleTranslate(msg.id, msg.content)}
+                    className="mt-1 ml-1 text-xs text-blue-400 hover:text-blue-500 transition-colors flex items-center gap-0.5"
+                    disabled={msgTranslation?.loading}
+                  >
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 5h12M9 3v2m1.048 9.5A18.966 18.966 0 0118.79 5M6 15h12m-3 2h3m-3-2v2m-6 4h12" />
+                    </svg>
+                    {msgTranslation?.loading ? '翻译中...' : msgTranslation?.show ? '收起翻译' : '翻译中文'}
+                  </button>
+                )}
+                {/* Translation display */}
+                {msgTranslation?.show && msgTranslation?.translation && (
+                  <div className="mt-1 ml-1 px-3 py-1.5 rounded-xl bg-blue-50 text-xs text-gray-700 leading-relaxed border border-blue-100">
+                    🇨🇳 {msgTranslation.translation}
+                  </div>
+                )}
               </div>
             </div>
           );
