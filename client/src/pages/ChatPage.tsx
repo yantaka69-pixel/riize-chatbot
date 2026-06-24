@@ -345,7 +345,11 @@ export default function ChatPage() {
               className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium shrink-0"
               style={{ backgroundColor: avatarColor }}
             >
-              {member.name.charAt(0)}
+              {member.avatarUrl ? (
+                <img src={member.avatarUrl} alt={member.name} className="w-8 h-8 rounded-full object-cover" />
+              ) : (
+                member.name.charAt(0)
+              )}
             </div>
             <div className="px-4 py-2 rounded-2xl bg-white border border-gray-100 text-sm text-gray-400 typing-indicator">
               正在输入中...

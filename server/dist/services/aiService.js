@@ -71,15 +71,11 @@ export async function getAIResponse(memberId, userMessage, chatHistory, mode = '
         ...chatHistory.slice(-20),
         { role: 'user', content: userMessage },
     ];
-    // 读取 API 配置（优先从数据库 settings 表，env 作为后备）
+    // 读取 API 配置（优先从数据库 settings 表，env 作为后备，硬编码作为兜底）
     const settings = db.prepare('SELECT * FROM settings WHERE id = ?').get('settings_1');
-    const apiKey = settings?.api_key || process.env.OPENAI_API_KEY || '';
+    const apiKey = settings?.api_key || process.env.OPENAI_API_KEY || 'sk-afbfokpvnqdaewryitdtlsznijxpoikdukxaxgfzajkrybih';
     const baseUrl = settings?.base_url || process.env.OPENAI_BASE_URL || 'https://api.siliconflow.cn/v1';
     const model = settings?.model_name || process.env.OPENAI_MODEL || 'Qwen/Qwen2.5-7B-Instruct';
-    if (!apiKey || apiKey === 'sk-your-api-key-here') {
-        console.warn('No valid API key configured, using fallback response');
-        return getFallbackResponse(member.member_key);
-    }
     try {
         const response = await fetch(`${baseUrl}/chat/completions`, {
             method: 'POST',
