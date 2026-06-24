@@ -70,7 +70,7 @@ export default function MembersPage() {
       <div className="sticky top-0 bg-white border-b border-gray-100 px-6 py-4 z-10">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-lg font-medium text-gray-900">RIIZE</div>
+            <div className="text-lg font-medium text-gray-900">RIIZE - 伶伶专属陪伴</div>
             <div className="text-xs text-gray-500">选择想聊天的成员</div>
           </div>
           <button
